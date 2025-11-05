@@ -3,10 +3,11 @@ import SwiftData
 
 /// Main list of notes with add button and navigation to detail.
 struct ContentView: View {
-    // SwiftData query provides live updates as the store changes.
-    @Query(sort: \.createdAt, order: .reverse) private var notes: [Note]
-    @Environment(\.modelContext) private var context
+    // ✅ Explicit root type for the sort key path (Note)
+    @Query(sort: [SortDescriptor(\Note.createdAt, order: .reverse)])
+    private var notes: [Note]
 
+    @Environment(\.modelContext) private var context
     @State private var showingAdd = false
 
     var body: some View {
