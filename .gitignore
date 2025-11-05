@@ -2,7 +2,5 @@
 xcuserdata/
 DerivedData/
 *.xcuserstate
-# SwiftPM
 .build/
-# CocoaPods (if used)
 Pods/
