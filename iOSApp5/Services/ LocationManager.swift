@@ -1,8 +1,7 @@
 import CoreLocation
 import Combine
 
-/// A light wrapper around CLLocationManager to request "when in use" authorization
-/// and publish the most recent location once available.
+/// Simple wrapper to request location and publish the last known location.
 final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var lastLocation: CLLocation?
@@ -14,11 +13,13 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func request() {
-        let status = manager.authorizationStatus
-        if status == .notDetermined {
+        switch manager.authorizationStatus {
+        case .notDetermined:
             manager.requestWhenInUseAuthorization()
-        } else if status == .authorizedWhenInUse || status == .authorizedAlways {
+        case .authorizedAlways, .authorizedWhenInUse:
             manager.startUpdatingLocation()
+        default:
+            break
         }
     }
 

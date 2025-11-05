@@ -7,7 +7,6 @@ struct iOSApp5App: App {
         WindowGroup {
             ContentView()
         }
-        // Attach the SwiftData model container at the scene level
-        .modelContainer(for: Note.self)
+        .modelContainer(for: [Note.self, MediaAttachment.self])
     }
 }
