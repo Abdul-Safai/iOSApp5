@@ -4,3 +4,18 @@ DerivedData/
 *.xcuserstate
 .build/
 Pods/
+# macOS
+.DS_Store
+
+# Xcode / Swift
+build/
+DerivedData/
+*.xcuserstate
+**/xcuserdata/
+*.xcscmblueprint
+
+# SwiftPM
+.build/
+
+# Logs
+*.log
