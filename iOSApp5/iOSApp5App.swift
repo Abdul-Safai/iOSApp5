@@ -7,6 +7,8 @@ struct iOSApp5App: App {
         WindowGroup {
             ContentView()
         }
+        // SwiftData models used by the app
         .modelContainer(for: [Note.self, MediaAttachment.self])
+        
     }
 }

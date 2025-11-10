@@ -1,29 +1,33 @@
 import Foundation
 import SwiftData
 
-/// Kind of media we support.
-enum MediaKind: String, Codable, CaseIterable {
-    case image
-    case video
-}
-
-/// A persisted media attachment stored on disk (Documents/Media/…).
-/// We keep only a relative path here, plus a tiny thumbnail for lists.
 @Model
 final class MediaAttachment {
-    var id: UUID
-    var kind: String          // MediaKind rawValue (SwiftData current limitation)
-    var fileName: String      // e.g. "IMG_1234.jpg" or "VID_5678.mov"
-    var thumbData: Data?      // small image bytes for list thumbnails
+    @Attribute(.unique) var id: UUID
+    /// For images, this stores the full image data (PNG/JPEG).
+    /// For videos, this can be empty `Data()` (we use `filePath` instead).
+    var data: Data
     var createdAt: Date
+    var note: Note?
 
-    init(kind: MediaKind, fileName: String, thumbData: Data?) {
-        self.id = UUID()
-        self.kind = kind.rawValue
-        self.fileName = fileName
-        self.thumbData = thumbData
-        self.createdAt = Date()
+    /// "image" or "video"
+    var mediaType: String
+    /// Local file path if mediaType == "video"
+    var filePath: String?
+
+    init(
+        id: UUID = UUID(),
+        data: Data,
+        createdAt: Date = .now,
+        note: Note? = nil,
+        mediaType: String = "image",
+        filePath: String? = nil
+    ) {
+        self.id = id
+        self.data = data
+        self.createdAt = createdAt
+        self.note = note
+        self.mediaType = mediaType
+        self.filePath = filePath
     }
-
-    var mediaKind: MediaKind { MediaKind(rawValue: kind) ?? .image }
 }

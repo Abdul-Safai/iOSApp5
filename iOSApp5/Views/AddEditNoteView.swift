@@ -1,234 +1,165 @@
 import SwiftUI
-import PhotosUI
-import MapKit
-import StoreKit
-import CoreHaptics
 import SwiftData
+import PhotosUI
+import UserNotifications
+import CoreLocation
 import UniformTypeIdentifiers
 
 struct AddEditNoteView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    @Environment(\.colorScheme) private var scheme
 
-    /// Callback so ContentView can show a toast
-    var onSaved: (() -> Void)? = nil
-
-    // Fields
-    @State private var titleText = ""
-    @State private var detailText = ""
-
-    // Media picker
-    @State private var pickerItems: [PhotosPickerItem] = []
-    @State private var previews: [(kind: MediaKind, image: UIImage)] = []
-
-    // Location
-    @StateObject private var locationManager = LocationManager()
-    @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832),
-        span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2)
-    )
-
-    // Haptics
-    @State private var engine: CHHapticEngine?
+    @State private var title = ""
+    @State private var text = ""
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var imageData: Data?
+    @State private var videoURL: URL?
+    @State private var addLocation = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-
-                    // MARK: Title
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Title")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        TextField("E.g., Lab Demo Recap", text: $titleText)
-                            .padding(.horizontal, 14)               // ← proper left/right inset
-                            .padding(.vertical, 12)
-                            .background(AppTheme.cardBackground(scheme),
-                                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(.separator.opacity(0.4))
-                            )
-                            .textInputAutocapitalization(.sentences)
-                    }
-                    .padding(.horizontal)
-                    .glassCard()
-
-                    // MARK: Details
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Details")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        TextEditor(text: $detailText)
-                            .padding(.horizontal, 14)               // ← same inset as title
-                            .padding(.vertical, 12)
-                            .frame(minHeight: 120)
-                            .background(AppTheme.cardBackground(scheme),
-                                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(.separator.opacity(0.4))
-                            )
-                    }
-                    .padding(.horizontal)
-                    .glassCard()
-
-                    // MARK: Attachments
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Attachments")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            PhotosPicker(selection: $pickerItems,
-                                         maxSelectionCount: 6,
-                                         matching: .any(of: [.images, .videos])) {
-                                Label("Add", systemImage: "plus.circle.fill")
-                            }
-                        }
-
-                        if !previews.isEmpty {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
-                                ForEach(Array(previews.enumerated()), id: \.offset) { _, item in
-                                    ZStack {
-                                        Image(uiImage: item.image)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(height: 110)
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        if item.kind == .video {
-                                            Image(systemName: "play.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(.white)
-                                                .shadow(radius: 3)
-                                        }
-                                    }
-                                }
-                            }
-                            .transition(.opacity.combined(with: .scale))
-                        } else {
-                            HStack(spacing: 12) {
-                                Image(systemName: "photo.on.rectangle.angled").font(.title2)
-                                Text("Add images or videos (up to 6).")
-                                Spacer()
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding()
-                    .glassCard()
-                    .padding(.horizontal)
-                    .onChange(of: pickerItems) { _, items in
-                        Task { await loadPreviews(items: items) }
-                    }
-
-                    // MARK: Location
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Location (optional)")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        Map(position: .constant(.region(region)))
-                            .frame(height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .onAppear { locationManager.request() }
-                            .onReceive(locationManager.$lastLocation) { loc in
-                                guard let loc else { return }
-                                region.center = loc.coordinate
-                            }
-                    }
-                    .padding()
-                    .glassCard()
-                    .padding(.horizontal)
-
-                    // MARK: Save
-                    PrimaryButton(title: "Save Note", systemImage: "checkmark.circle.fill") {
-                        Task { await saveNote() }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
-                    .disabled(titleText.trimmingCharacters(in: .whitespaces).isEmpty)
+            Form {
+                Section("Basics") {
+                    TextField("Title", text: $title)
+                    TextField("Note", text: $text, axis: .vertical)
+                        .lineLimit(5, reservesSpace: true)
                 }
-                .padding(.top, 12)
+
+                Section("Attachment") {
+                    PhotosPicker(
+                        selection: $pickerItem,
+                        matching: .any(of: [.images, .videos]) // ← images + videos
+                    ) {
+                        Label("Choose Photo/Video", systemImage: "photo.on.rectangle")
+                    }
+
+                    // Preview: image or simple video badge
+                    if let imageData, let ui = UIImage(data: imageData) {
+                        Image(uiImage: ui)
+                            .resizable().scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else if let videoURL {
+                        HStack(spacing: 8) {
+                            Image(systemName: "video.fill")
+                            Text(videoURL.lastPathComponent).lineLimit(1)
+                            Spacer()
+                        }
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+
+                Section("Location") {
+                    Toggle("Tag current location", isOn: $addLocation)
+                }
             }
             .navigationTitle("New Note")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
-            }
-            .task { prepareHaptics() }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func loadPreviews(items: [PhotosPickerItem]) async {
-        withAnimation { previews.removeAll() }
-        for item in items {
-            guard let type = item.supportedContentTypes.first else { continue }
-            if type.conforms(to: .image) {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let ui = UIImage(data: data) {
-                    withAnimation(.spring) { previews.append((.image, ui)) }
-                }
-            } else if type.conforms(to: .movie) {
-                withAnimation(.spring) {
-                    previews.append((.video, UIImage(systemName: "video.fill")!))
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }.disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-        }
-    }
+            // Load picked asset: detect image vs video and store accordingly
+            .onChange(of: pickerItem) { _, newValue in
+                Task {
+                    imageData = nil
+                    videoURL = nil
 
-    private func saveNote() async {
-        let lat = locationManager.lastLocation?.coordinate.latitude
-        let lon = locationManager.lastLocation?.coordinate.longitude
-        let note = Note(title: titleText.trimmingCharacters(in: .whitespacesAndNewlines),
-                        detail: detailText.trimmingCharacters(in: .whitespacesAndNewlines),
-                        latitude: lat, longitude: lon)
-
-        // Convert picker items to persisted attachments
-        for item in pickerItems {
-            guard let t = item.supportedContentTypes.first else { continue }
-            if t.conforms(to: .image), let data = try? await item.loadTransferable(type: Data.self) {
-                if let (name, thumb) = try? MediaStore.saveImage(data) {
-                    note.attachments.append(MediaAttachment(kind: .image, fileName: name, thumbData: thumb))
-                }
-            } else if t.conforms(to: .movie), let url = try? await item.loadTransferable(type: URL.self) {
-                if let (name, thumb) = try? MediaStore.saveVideo(from: url) {
-                    note.attachments.append(MediaAttachment(kind: .video, fileName: name, thumbData: thumb))
+                    guard let item = newValue else { return }
+                    // Determine type via supportedContentTypes
+                    if item.supportedContentTypes.contains(where: { $0.conforms(to: .image) }) {
+                        // Load image data
+                        imageData = try? await item.loadTransferable(type: Data.self)
+                    } else if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
+                        // Load a local copy of the movie file via our Transferable wrapper
+                        if let selection = try? await item.loadTransferable(type: VideoSelection.self) {
+                            videoURL = selection.url
+                        }
+                    }
                 }
             }
         }
+    }
 
-        context.insert(note)
-        do {
-            try context.save()
-            triggerSuccessHaptic()
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                SKStoreReviewController.requestReview(in: scene)
+    private func save() {
+        var lat: Double? = nil, lon: Double? = nil
+
+        let finish: () -> Void = {
+            let note = Note(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                text: text,
+                latitude: lat,
+                longitude: lon
+            )
+            note.updatedAt = .now
+
+            if let data = imageData {
+                // image attachment
+                note.attachments.append(
+                    MediaAttachment(data: data, note: note, mediaType: "image", filePath: nil)
+                )
+            } else if let url = videoURL {
+                // video attachment (store file path, leave data empty)
+                note.attachments.append(
+                    MediaAttachment(data: Data(), note: note, mediaType: "video", filePath: url.path)
+                )
             }
-            onSaved?()
-            dismiss()
-        } catch {
-            print("Save failed:", error.localizedDescription)
+
+            context.insert(note)
+            do {
+                try context.save()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                scheduleReminder(for: note)
+                dismiss()
+            } catch {
+                print("SwiftData save error:", error.localizedDescription)
+            }
+        }
+
+        if addLocation {
+            LocationManager.shared.requestOneShot { loc in
+                lat = loc?.coordinate.latitude
+                lon = loc?.coordinate.longitude
+                finish()
+            }
+        } else {
+            finish()
         }
     }
 
-    private func prepareHaptics() {
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
-        engine = try? CHHapticEngine()
-        try? engine?.start()
+    private func scheduleReminder(for note: Note) {
+        Task {
+            let center = UNUserNotificationCenter.current()
+            _ = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
+            var comp = DateComponents(); comp.hour = 20; comp.minute = 0
+            let content = UNMutableNotificationContent()
+            content.title = "Remember: \(note.title)"
+            content.body = "Review your note today."
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comp, repeats: true)
+            let req = UNNotificationRequest(identifier: note.id.uuidString, content: content, trigger: trigger)
+            try? await center.add(req)
+        }
     }
+}
 
-    private func triggerSuccessHaptic() {
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
-        let taps = [CHHapticEvent(eventType: .hapticTransient, parameters: [], relativeTime: 0)]
-        if let pattern = try? CHHapticPattern(events: taps, parameters: []),
-           let player = try? engine?.makePlayer(with: pattern) {
-            try? player.start(atTime: 0)
+/// A Transferable wrapper that copies a picked video into your app’s temp folder
+/// and returns a local URL you can play later.
+struct VideoSelection: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { value in
+            // When sharing out (not used here)
+            SentTransferredFile(value.url)
+        } importing: { received in
+            // Copy the received file into a temp location your app can access
+            let ext = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
+            let dest = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).\(ext)")
+            // Remove existing file if any
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.copyItem(at: received.file, to: dest)
+            return VideoSelection(url: dest)
         }
     }
 }

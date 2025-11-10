@@ -1,24 +1,11 @@
 import SwiftUI
 
-struct PrimaryButton: View {
-    var title: String
-    var systemImage: String? = nil
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if let s = systemImage { Image(systemName: s) }
-                Text(title).fontWeight(.semibold)
-            }
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(AppTheme.gradient)
-            .foregroundStyle(.primary)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.corner, style: .continuous))
-            .shadow(radius: 6, y: 3)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
+struct PrimaryProminentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(.tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .foregroundStyle(.white)
+            .opacity(configuration.isPressed ? 0.85 : 1)
     }
 }

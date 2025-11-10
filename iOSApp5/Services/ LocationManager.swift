@@ -1,35 +1,31 @@
 import CoreLocation
-import Combine
 
-/// Simple wrapper to request location and publish the last known location.
-final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
-    @Published var lastLocation: CLLocation?
+final class LocationManager: NSObject, CLLocationManagerDelegate {
+    static let shared = LocationManager()
+    private let mgr = CLLocationManager()
+    private var completion: ((CLLocation?) -> Void)?
 
-    override init() {
+    private override init() {
         super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        mgr.delegate = self
     }
 
-    func request() {
-        switch manager.authorizationStatus {
-        case .notDetermined:
-            manager.requestWhenInUseAuthorization()
-        case .authorizedAlways, .authorizedWhenInUse:
-            manager.startUpdatingLocation()
-        default:
-            break
+    func requestOneShot(completion: @escaping (CLLocation?) -> Void) {
+        self.completion = completion
+        switch CLLocationManager.authorizationStatus() {
+        case .notDetermined: mgr.requestWhenInUseAuthorization()
+        default: break
         }
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
-            self.manager.startUpdatingLocation()
-        }
+        mgr.requestLocation()
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        lastLocation = locations.last
+        completion?(locations.last)
+        completion = nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        completion?(nil)
+        completion = nil
     }
 }
