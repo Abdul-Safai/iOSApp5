@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftData
-import AVFoundation   // <-- for video thumbnail generation
+import AVFoundation   // for video thumbnail generation
 
 struct ContentView: View {
     @Environment(\.modelContext) private var context
@@ -15,35 +15,76 @@ struct ContentView: View {
             Group {
                 if filtered.isEmpty {
                     VStack(spacing: 16) {
-                        Image(systemName: "note.text").font(.system(size: 52))
-                        Text("Create your first note").font(.title3).bold()
-                        Button { showAdd = true } label: {
-                            Label("New Note", systemImage: "plus")
+                        Image(systemName: "note.text").font(.system(size: 56))
+                        Text("Welcome to MemoFlow")
+                            .font(.title2).bold()
+                        Text("Capture thoughts, photos, and videos in a clean, modern notebook.")
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+
+                        HStack(spacing: 12) {
+                            Button {
+                                showAdd = true
+                            } label: {
+                                Label("New Note", systemImage: "plus")
+                                    .fontWeight(.semibold)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                            Button {
+                                addSampleNotes()
+                            } label: {
+                                Label("Add Samples", systemImage: "sparkles")
+                            }
+                            .buttonStyle(.bordered)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                     .padding()
                 } else {
                     List {
                         ForEach(filtered) { note in
-                            NavigationLink(value: note) { NoteRow(note: note) }
-                                .swipeActions {
-                                    Button(role: .destructive) {
-                                        context.delete(note)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
+                            NavigationLink(value: note) {
+                                NoteRow(note: note)
+                                    .padding(10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(.secondarySystemBackground))
+                                    )
+                            }
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    context.delete(note)
+                                } label: { Label("Delete", systemImage: "trash") }
+                            }
                         }
                     }
-                    .listStyle(.insetGrouped)
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 8)
                 }
             }
-            .searchable(text: $search)
-            .navigationTitle("iOSApp5 Notes")
+            .searchable(text: $search, prompt: "Search notes")
+            .navigationTitle("MemoFlow")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        addSampleNotes()
+                    } label: {
+                        Label("Add Samples", systemImage: "sparkles")
+                    }
+                    .tint(.secondary)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus.circle.fill") }
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                    }
+                    .tint(.accentColor)
                 }
             }
             .sheet(isPresented: $showAdd) { AddEditNoteView() }
@@ -59,7 +100,25 @@ struct ContentView: View {
     private var filtered: [Note] {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return notes }
-        return notes.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.text.localizedCaseInsensitiveContains(q) }
+        return notes.filter {
+            $0.title.localizedCaseInsensitiveContains(q) ||
+            $0.text.localizedCaseInsensitiveContains(q)
+        }
+    }
+
+    /// Create a few example notes for demo/teacher review.
+    private func addSampleNotes() {
+        let examples: [(String, String)] = [
+            ("Project Ideas", "✅ MemoFlow v1.0 launch tasks\n• Add tags\n• Improve video preview\n• iCloud sync (future)"),
+            ("Grocery List", "Eggs, milk, spinach, feta, pita bread"),
+            ("Workout Plan", "Push/Pull/Legs split, 3x per week. Track progress weekly.")
+        ]
+        for (title, body) in examples {
+            let n = Note(title: title, text: body)
+            n.updatedAt = .now
+            context.insert(n)
+        }
+        try? context.save()
     }
 }
 
@@ -69,15 +128,24 @@ struct NoteRow: View {
     var body: some View {
         HStack(spacing: 12) {
             mediaThumbnail
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(width: 50, height: 50)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(note.title).font(.headline)
-                Text(note.text).lineLimit(1).foregroundStyle(.secondary)
+                Text(note.title)
+                    .font(.headline)
+                Text(note.text)
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
             }
             Spacer()
-            Text(note.updatedAt, style: .time).font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(note.updatedAt, style: .time)
+                    .font(.caption).foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
         }
     }
 
@@ -93,7 +161,9 @@ struct NoteRow: View {
                     ZStack {
                         Image(uiImage: thumb).resizable().scaledToFill()
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 18)).shadow(radius: 2).foregroundStyle(.white)
+                            .font(.system(size: 18))
+                            .shadow(radius: 2)
+                            .foregroundStyle(.white)
                     }
                 )
             }
@@ -101,9 +171,11 @@ struct NoteRow: View {
         // Fallback placeholder
         return AnyView(
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color(.secondarySystemFill))
-                Image(systemName: "photo").imageScale(.large).foregroundStyle(.secondary)
+                Image(systemName: "photo")
+                    .imageScale(.large)
+                    .foregroundStyle(.secondary)
             }
         )
     }
@@ -120,8 +192,7 @@ struct NoteRow: View {
             let time = CMTime(seconds: 0.1, preferredTimescale: 600)
             let cg = try generator.copyCGImage(at: time, actualTime: nil)
             let img = UIImage(cgImage: cg)
-            // best-effort cleanup
-            try? FileManager.default.removeItem(at: tmpURL)
+            try? FileManager.default.removeItem(at: tmpURL) // cleanup
             return img
         } catch {
             try? FileManager.default.removeItem(at: tmpURL)
