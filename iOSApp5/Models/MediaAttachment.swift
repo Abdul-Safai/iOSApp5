@@ -1,33 +1,36 @@
 import Foundation
 import SwiftData
 
+enum MediaType: String, Codable, Sendable {
+    case image
+    case video
+}
+
 @Model
 final class MediaAttachment {
     @Attribute(.unique) var id: UUID
-    /// For images, this stores the full image data (PNG/JPEG).
-    /// For videos, this can be empty `Data()` (we use `filePath` instead).
-    var data: Data
+    var data: Data                   // raw image/video data
     var createdAt: Date
+    var typeRaw: String              // SwiftData stores simple types reliably
+
     var note: Note?
 
-    /// "image" or "video"
-    var mediaType: String
-    /// Local file path if mediaType == "video"
-    var filePath: String?
+    var type: MediaType {
+        get { MediaType(rawValue: typeRaw) ?? .image }
+        set { typeRaw = newValue.rawValue }
+    }
 
     init(
         id: UUID = UUID(),
         data: Data,
+        type: MediaType,
         createdAt: Date = .now,
-        note: Note? = nil,
-        mediaType: String = "image",
-        filePath: String? = nil
+        note: Note? = nil
     ) {
         self.id = id
         self.data = data
+        self.typeRaw = type.rawValue
         self.createdAt = createdAt
         self.note = note
-        self.mediaType = mediaType
-        self.filePath = filePath
     }
 }

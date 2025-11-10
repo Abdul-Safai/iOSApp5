@@ -13,7 +13,7 @@ struct AddEditNoteView: View {
     @State private var text = ""
     @State private var pickerItem: PhotosPickerItem?
     @State private var imageData: Data?
-    @State private var videoURL: URL?
+    @State private var videoData: Data?
     @State private var addLocation = false
 
     var body: some View {
@@ -24,31 +24,24 @@ struct AddEditNoteView: View {
                     TextField("Note", text: $text, axis: .vertical)
                         .lineLimit(5, reservesSpace: true)
                 }
-
                 Section("Attachment") {
                     PhotosPicker(
                         selection: $pickerItem,
-                        matching: .any(of: [.images, .videos]) // ← images + videos
-                    ) {
-                        Label("Choose Photo/Video", systemImage: "photo.on.rectangle")
-                    }
+                        matching: .any(of: [.images, .videos])
+                    ) { Label("Choose Photo or Video", systemImage: "photo.on.rectangle") }
 
-                    // Preview: image or simple video badge
-                    if let imageData, let ui = UIImage(data: imageData) {
+                    if let data = imageData, let ui = UIImage(data: data) {
                         Image(uiImage: ui)
                             .resizable().scaledToFit()
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else if let videoURL {
+                    } else if videoData != nil {
                         HStack(spacing: 8) {
                             Image(systemName: "video.fill")
-                            Text(videoURL.lastPathComponent).lineLimit(1)
-                            Spacer()
+                            Text("Video selected")
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(8)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
-
                 Section("Location") {
                     Toggle("Tag current location", isOn: $addLocation)
                 }
@@ -60,23 +53,33 @@ struct AddEditNoteView: View {
                     Button("Save") { save() }.disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            // Load picked asset: detect image vs video and store accordingly
-            .onChange(of: pickerItem) { _, newValue in
-                Task {
-                    imageData = nil
-                    videoURL = nil
+            // iOS 17-compatible signature avoids generic inference errors
+            .onChange(of: pickerItem) { newValue in
+                Task { await loadPickedMedia(newValue) }
+            }
+        }
+    }
 
-                    guard let item = newValue else { return }
-                    // Determine type via supportedContentTypes
-                    if item.supportedContentTypes.contains(where: { $0.conforms(to: .image) }) {
-                        // Load image data
-                        imageData = try? await item.loadTransferable(type: Data.self)
-                    } else if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
-                        // Load a local copy of the movie file via our Transferable wrapper
-                        if let selection = try? await item.loadTransferable(type: VideoSelection.self) {
-                            videoURL = selection.url
-                        }
-                    }
+    private func loadPickedMedia(_ item: PhotosPickerItem?) async {
+        imageData = nil
+        videoData = nil
+        guard let item else { return }
+
+        let types = item.supportedContentTypes
+        let isImage = types.contains(where: { $0.conforms(to: .image) })
+        let isVideo = types.contains(where: { $0.conforms(to: .movie) || $0.conforms(to: .video) })
+
+        if let data = try? await item.loadTransferable(type: Data.self) {
+            if isImage {
+                imageData = data
+            } else if isVideo {
+                videoData = data
+            } else {
+                // Fallback: guess by size/header; if it decodes as image, treat as image
+                if UIImage(data: data) != nil {
+                    imageData = data
+                } else {
+                    videoData = data
                 }
             }
         }
@@ -95,15 +98,9 @@ struct AddEditNoteView: View {
             note.updatedAt = .now
 
             if let data = imageData {
-                // image attachment
-                note.attachments.append(
-                    MediaAttachment(data: data, note: note, mediaType: "image", filePath: nil)
-                )
-            } else if let url = videoURL {
-                // video attachment (store file path, leave data empty)
-                note.attachments.append(
-                    MediaAttachment(data: Data(), note: note, mediaType: "video", filePath: url.path)
-                )
+                note.attachments.append(.init(data: data, type: .image, note: note))
+            } else if let data = videoData {
+                note.attachments.append(.init(data: data, type: .video, note: note))
             }
 
             context.insert(note)
@@ -139,27 +136,6 @@ struct AddEditNoteView: View {
             let trigger = UNCalendarNotificationTrigger(dateMatching: comp, repeats: true)
             let req = UNNotificationRequest(identifier: note.id.uuidString, content: content, trigger: trigger)
             try? await center.add(req)
-        }
-    }
-}
-
-/// A Transferable wrapper that copies a picked video into your app’s temp folder
-/// and returns a local URL you can play later.
-struct VideoSelection: Transferable {
-    let url: URL
-
-    static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(contentType: .movie) { value in
-            // When sharing out (not used here)
-            SentTransferredFile(value.url)
-        } importing: { received in
-            // Copy the received file into a temp location your app can access
-            let ext = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
-            let dest = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).\(ext)")
-            // Remove existing file if any
-            try? FileManager.default.removeItem(at: dest)
-            try FileManager.default.copyItem(at: received.file, to: dest)
-            return VideoSelection(url: dest)
         }
     }
 }

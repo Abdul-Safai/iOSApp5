@@ -6,23 +6,13 @@ import AVKit
 struct NoteDetailScreen: View {
     @Environment(\.modelContext) private var context
     @Bindable var note: Note
+    @State private var tempVideoURL: URL?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-
-                // IMAGE OR VIDEO RENDER
-                if let first = note.attachments.first {
-                    if first.mediaType == "image", let ui = image(from: first.data) {
-                        Image(uiImage: ui)
-                            .resizable().scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                    } else if first.mediaType == "video", let path = first.filePath {
-                        let url = URL(fileURLWithPath: path)
-                        VideoPlayer(player: AVPlayer(url: url))
-                            .frame(height: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                    }
+                if let att = note.attachments.first {
+                    attachmentView(att)
                 }
 
                 Text(note.text).frame(maxWidth: .infinity, alignment: .leading)
@@ -37,7 +27,6 @@ struct NoteDetailScreen: View {
                 HStack {
                     NavigationLink("Edit") { EditNoteView(note: note) }
                     Spacer()
-                    // Keep Export JSON (you said you want it there)
                     ShareLink(item: exportJSONURL(),
                               preview: SharePreview("Note JSON", image: Image(systemName: "square.and.arrow.up"))) {
                         Label("Export JSON", systemImage: "square.and.arrow.up")
@@ -52,8 +41,34 @@ struct NoteDetailScreen: View {
         .navigationTitle(note.title)
     }
 
-    private func image(from data: Data) -> UIImage? {
-        UIImage(data: data)
+    @ViewBuilder
+    private func attachmentView(_ att: MediaAttachment) -> some View {
+        switch att.type {
+        case .image:
+            if let ui = UIImage(data: att.data) {
+                Image(uiImage: ui).resizable().scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+        case .video:
+            if let url = makeTempURL(from: att.data) {
+                VideoPlayer(player: AVPlayer(url: url))
+                    .frame(height: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .onDisappear { /* stop playback */ }
+            } else {
+                Label("Video preview unavailable", systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    private func makeTempURL(from data: Data) -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("att_\(UUID().uuidString).mov")
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     private func exportJSONURL() -> URL {
