@@ -397,6 +397,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MemoFlow;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to tag notes.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need photo access to attach images.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -426,6 +427,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MemoFlow;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to tag notes.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need photo access to attach images.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

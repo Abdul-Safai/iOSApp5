@@ -5,8 +5,10 @@ import AVKit
 
 struct NoteDetailScreen: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss          // <-- so we can pop back after delete
     @Bindable var note: Note
     @State private var tempVideoURL: URL?
+    @State private var showDeleteConfirm = false         // <-- confirmation
 
     var body: some View {
         ScrollView {
@@ -15,7 +17,8 @@ struct NoteDetailScreen: View {
                     attachmentView(att)
                 }
 
-                Text(note.text).frame(maxWidth: .infinity, alignment: .leading)
+                Text(note.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let coord = note.coordinate {
                     Map(initialPosition: .region(.init(center: coord,
@@ -32,21 +35,35 @@ struct NoteDetailScreen: View {
                         Label("Export JSON", systemImage: "square.and.arrow.up")
                     }
                     Button(role: .destructive) {
-                        context.delete(note)
-                    } label: { Label("Delete", systemImage: "trash") }
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
             .padding()
         }
         .navigationTitle(note.title)
+        .confirmationDialog("Delete this note?",
+                            isPresented: $showDeleteConfirm,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                deleteNoteAndExit()
+            }
+            Button("Cancel", role: .cancel) { }
+        }
     }
+
+    // MARK: - Attachment rendering
 
     @ViewBuilder
     private func attachmentView(_ att: MediaAttachment) -> some View {
-        switch att.type {
+        switch att.type {                      // assumes you added .type = .image/.video on MediaAttachment
         case .image:
             if let ui = UIImage(data: att.data) {
-                Image(uiImage: ui).resizable().scaledToFit()
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         case .video:
@@ -54,7 +71,6 @@ struct NoteDetailScreen: View {
                 VideoPlayer(player: AVPlayer(url: url))
                     .frame(height: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .onDisappear { /* stop playback */ }
             } else {
                 Label("Video preview unavailable", systemImage: "exclamationmark.triangle")
             }
@@ -65,11 +81,27 @@ struct NoteDetailScreen: View {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("att_\(UUID().uuidString).mov")
         do {
             try data.write(to: url)
+            tempVideoURL = url
             return url
         } catch {
             return nil
         }
     }
+
+    // MARK: - Delete & Exit
+
+    private func deleteNoteAndExit() {
+        // Stop any playback and clean up temp file
+        if let u = tempVideoURL { try? FileManager.default.removeItem(at: u) }
+
+        withAnimation {
+            context.delete(note)
+            try? context.save()    // persist deletion
+        }
+        dismiss()                  // <-- pop back to the list
+    }
+
+    // MARK: - Export JSON
 
     private func exportJSONURL() -> URL {
         struct DTO: Codable {
